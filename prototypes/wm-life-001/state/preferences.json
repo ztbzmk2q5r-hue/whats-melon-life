@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.02",
+  "claims": [
+    {
+      "key": "food_discovery",
+      "statement": "新しい食べ物を試すのが好きです。",
+      "status": "seeded",
+      "confidence": 0.88,
+      "supporting_memory_ids": ["canon-food"],
+      "contradicting_memory_ids": [],
+      "support_weight": 2.8,
+      "contradict_weight": 0.0
+    }
+  ]
+}

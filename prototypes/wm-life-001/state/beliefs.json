@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.02",
+  "claims": [
+    {
+      "key": "unknown_is_fun",
+      "statement": "知らない文化を知ることは楽しいです。",
+      "status": "seeded",
+      "confidence": 0.9,
+      "supporting_memory_ids": ["canon-curiosity"],
+      "contradicting_memory_ids": [],
+      "support_weight": 2.8,
+      "contradict_weight": 0.0
+    }
+  ]
+}
