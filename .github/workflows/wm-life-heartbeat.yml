@@ -1,0 +1,52 @@
+name: WM-LIFE-001 Heartbeat
+
+on:
+  schedule:
+    - cron: '53 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wm-life-001-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run tests
+        working-directory: prototypes/wm-life-001
+        run: python run_tests.py
+
+      - name: Run one heartbeat
+        working-directory: prototypes/wm-life-001
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m wm_brain.cli --state state | tee heartbeat-result.json
+
+      - name: Persist heartbeat state
+        run: |
+          if git diff --quiet -- prototypes/wm-life-001/state; then
+            echo 'No state changes to persist.'
+            exit 0
+          fi
+          git config user.name 'wm-life-heartbeat[bot]'
+          git config user.email 'wm-life-heartbeat[bot]@users.noreply.github.com'
+          git add prototypes/wm-life-001/state
+          git commit -m 'WM-LIFE-001 heartbeat state'
+          git pull --rebase origin main
+          git push origin HEAD:main
