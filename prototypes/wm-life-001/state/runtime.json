@@ -1,17 +1,19 @@
 {
-  "heartbeat_count": 1,
-  "last_heartbeat_at": "2026-08-15T13:23:13.859751+00:00",
-  "last_spoke_at": null,
-  "silence_streak": 1,
-  "speech_count": 0,
-  "curiosity": 0.752,
-  "loneliness": 0.18,
+  "heartbeat_count": 2,
+  "last_heartbeat_at": "2026-08-17T10:16:28.720965+00:00",
+  "last_spoke_at": "2026-08-17T10:16:28.720965+00:00",
+  "silence_streak": 0,
+  "speech_count": 1,
+  "curiosity": 0.784,
+  "loneliness": 0.18200000000000002,
   "playfulness": 0.72,
   "affection": 0.82,
-  "boredom": 0.21,
-  "energy": 0.7696000000000001,
-  "hunger": 0.318,
-  "initiative": 0.662308,
+  "boredom": 0.23779999999999996,
+  "energy": 0.7440853333333334,
+  "hunger": 0.366,
+  "initiative": 0.6843734933333333,
   "current_thought": "しゅんが今なにをしているのか、少し気になります。",
-  "open_threads": ["しゅんが今なにをしているのか、少し気になります。"]
+  "open_threads": [
+    "しゅんが今なにをしているのか、少し気になります。"
+  ]
 }
