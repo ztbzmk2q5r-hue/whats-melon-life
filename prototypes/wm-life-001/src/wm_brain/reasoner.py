@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime, timezone
 
 
 class HeuristicReasoner:
@@ -6,7 +7,7 @@ class HeuristicReasoner:
     オフライン/Actions用の軽量Reasoner。
     同じ呼びかけを固定で繰り返さず、現在の内部状態・記憶・未完了関心から
     アネラらしい複数の自発会話パターンを選ぶ。
-    本格的な自由会話ReasonerはLLM API実装へ差し替え可能。
+    open_threads は構造化された未解決の会話だけを継続話題として扱う。
     """
 
     def _pick(self, items, context, salt=""):
@@ -24,23 +25,53 @@ class HeuristicReasoner:
         memories = context.get("memories") or []
         return " ".join(str(m.get("summary", "")) for m in memories[-8:])
 
-    def think(self, context):
+    def _active_thread(self, context):
+        """Only structured, unresolved and reasonably recent threads are continuations."""
         runtime = context.get("runtime", {})
         threads = runtime.get("open_threads") or []
-        affect = runtime.get("affect") or {}
+        now = datetime.now(timezone.utc)
+        for thread in threads:
+            if not isinstance(thread, dict):
+                # Legacy plain strings were internal thoughts, not conversation threads.
+                continue
+            if thread.get("resolved", False):
+                continue
+            text = str(thread.get("text", "")).strip()
+            if not text:
+                continue
+            created_at = thread.get("created_at")
+            if created_at:
+                try:
+                    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if (now - dt.astimezone(timezone.utc)).total_seconds() > 24 * 3600:
+                        continue
+                except (ValueError, TypeError):
+                    continue
+            return thread
+        return None
+
+    def think(self, context):
+        runtime = context.get("runtime", {})
+        affect = runtime.get("affect") or runtime
         memory_text = self._recent_memory_text(context)
+        thread = self._active_thread(context)
 
-        if threads:
-            thread = threads[0]
-            return {"text": thread, "speak_bias": 0.04, "topic": "open_thread"}
+        if thread:
+            return {
+                "text": thread["text"],
+                "speak_bias": 0.04,
+                "topic": "open_thread",
+                "thread_id": thread.get("id"),
+            }
 
-        if "アボカド" in memory_text:
+        if "アボカド" in memory_text and affect.get("curiosity", 0) >= 0.72:
             avocado = [
                 "この前しゅんが教えてくれたアボカド、まだ食べていません。ちょっと気になります。",
                 "アボカドって、結局どんな味なんでしょう。しゅんに今度聞いてみたいです。",
             ]
-            if affect.get("curiosity", 0) >= 0.72:
-                return {"text": self._pick(avocado, context, "avocado-thought"), "speak_bias": 0.035, "topic": "avocado"}
+            return {"text": self._pick(avocado, context, "avocado-thought"), "speak_bias": 0.035, "topic": "avocado"}
 
         if affect.get("loneliness", 0) >= 0.58:
             thoughts = [
@@ -71,7 +102,6 @@ class HeuristicReasoner:
     def speak(self, context, thought):
         topic = thought.get("topic", "general") if isinstance(thought, dict) else "general"
         text = thought.get("text", "") if isinstance(thought, dict) else str(thought)
-
         patterns = {
             "avocado": [
                 "しゅん！　そういえばアボカド、まだ食べてないんです！　今度見つけたら教えてください！",
