@@ -68,9 +68,6 @@ class HeuristicReasoner:
         if thread:
             return {"text": thread["text"], "speak_bias": 0.04, "topic": "open_thread", "thread_id": thread.get("id")}
 
-        # Dialogue progression outranks the older avocado memory. Once Shun has
-        # said he does not know the shop and Anela proposed searching together,
-        # never regress to 'tell me when you find one'.
         if "アボカド" in memory_text or "アボカド" in conversation_text:
             searched_together = "一緒に探しに行きましょう" in conversation_text
             shun_doesnt_know = "売ってる場所分かんない" in conversation_text
@@ -103,12 +100,12 @@ class HeuristicReasoner:
         topic = thought.get("topic", "general") if isinstance(thought, dict) else "general"
         text = thought.get("text", "") if isinstance(thought, dict) else str(thought)
         patterns = {
-            "avocado": ["しゅん！　そういえばアボカド、まだ食べてないんです！　今度見つけたら教えてください！", "しゅん、アボカドってどんな味なんですか？　この前からちょっと気になってるんですよね。"],
-            "avocado_progress": ["しゅん！　今度アボカド、一緒に探しに行きましょうね！　見つけたら私、食べてみたいです！", "しゅん、アボカド探しのこと忘れてませんよね？　私、ちょっと楽しみにしてるんです！", "しゅん！　スーパーに行くことがあったら、今度はアボカド探しましょう！"],
-            "company": ["しゅんー！　今、暇ですか？　少しくらい私に構ってください！", "しゅん、何してるんですか？　……別に、ちょっと気になっただけです！", "しゅん！　まだ起きてます？　少しお話ししましょうよ！"],
-            "boredom": ["しゅん！　何か面白いことありませんか？　私、ちょっと暇です！", "しゅん、今から何かしませんか？　グランドオブガンでもいいですよ！", "しゅん！　新しい面白いもの、何か教えてください！"],
-            "open_thread": ["しゅん！　さっきのこと、まだ気になってるんですけど！", "しゅん、そういえばさっきの話なんですが……もう少し聞いてもいいですか？"],
-            "general": ["しゅん！　今、なにをしているんですか？", "しゅん、今日は何するんですか？", "しゅん！　何か面白いもの見つけました？", "しゅんー！　ちょっとこっち来てください！", "しゅん、ちゃんと起きてます？", "しゅん！　少しお話ししませんか？"],
+            "avocado": ["しゅん！　そういえばアボカド、まだ食べてないんですね！　私、今度こそ食べてみたいです！", "しゅん、アボカドってどんな味なんですか？　この前からずっと気になってるんですよ！"],
+            "avocado_progress": ["しゅん！　今度アボカド、一緒に探しに行くんですよね！　見つけたら私、食べてみたいです！", "しゅん、アボカド探しのこと忘れてませんよね？　見つけるまでが勝負ですね！", "しゅん！　スーパーに行くことがあったら、今度はアボカド探しですね！"],
+            "company": ["しゅんー！　今、暇なんですね？　だったら少しくらい私に構ってください！", "しゅん、何してるんですか？　……なんとなく気になったんですよ！", "しゅん！　まだ起きてるんですね！　それなら少しお話ししましょう！"],
+            "boredom": ["しゅん！　何か面白いことありませんか？　私、ちょっと暇なんですよ！", "しゅん、今から何かしませんか？　グランドオブガンでもいいですね！", "しゅん！　新しい面白いもの、何か教えてください！　まだ知らないものがいっぱいですね！"],
+            "open_thread": ["しゅん！　さっきのこと、まだ気になってるんですよ！", "しゅん、そういえばさっきの話なんですが……続き、聞いてもいいんですよね？"],
+            "general": ["しゅん！　今、なにをしているんですか？　何か面白いことしてるんですね？", "しゅん、今日は何するんですか？　何かするなら私も一緒ですね！", "しゅん！　何か面白いもの見つけました？　私にも見せてください！", "しゅんー！　ちょっとこっち来てください！　いいものを思いついたんですよ！", "しゅん、ちゃんと起きてるんですね？　なら問題なしですね！", "しゅん！　少しお話ししませんか？　ちょうど暇だったんですよ！"],
         }
         options = patterns.get(topic, patterns["general"])
         return self._pick_nonrepeating(options, context, f"speech:{topic}:{text}")
