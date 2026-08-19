@@ -60,7 +60,11 @@ class WMLifeBrain:
             "preferences": self.store.load_json("preferences.json"),
             "relationship": self.store.load_json("relationship.json"),
             "runtime": rt.to_dict(),
-            "memories": self.store.memories()[-20:]
+            "memories": self.store.memories()[-20:],
+            # Recent dialogue is short-term episodic context. It outranks older
+            # memory summaries when deciding what has already been said or how
+            # an ongoing topic has progressed.
+            "recent_conversation": self.store.conversations()[-16:]
         }
 
         thought = self.reasoner.think(context)
@@ -78,7 +82,6 @@ class WMLifeBrain:
             rt.loneliness *= 0.78
             rt.boredom *= 0.82
 
-            # Every actual utterance becomes auditable research data.
             self.store.append_conversation({
                 "id": f"speech-{rt.speech_count:06d}",
                 "timestamp": now.isoformat(),
