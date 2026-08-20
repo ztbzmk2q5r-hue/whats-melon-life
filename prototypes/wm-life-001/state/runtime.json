@@ -13,5 +13,9 @@
   "hunger": 0.7490836069766666,
   "initiative": 0.7370955131061293,
   "current_thought": "しゅんも売っている場所を知らないなら、今度一緒に探すのが楽しみです。",
-  "open_threads": []
+  "open_threads": [],
+  "topic_last_spoken": {
+    "avocado": 23,
+    "avocado_progress": 23
+  }
 }
