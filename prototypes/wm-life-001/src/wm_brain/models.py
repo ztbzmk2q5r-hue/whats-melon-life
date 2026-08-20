@@ -20,7 +20,10 @@ class RuntimeState:
     hunger: float = 0.30
     initiative: float = 0.42
     current_thought: str = ""
-    open_threads: list[str] = field(default_factory=list)
+    open_threads: list = field(default_factory=list)
+    # topic -> heartbeat_count when Anela last spoke about it.
+    # This is short-term attention, not personality or long-term memory.
+    topic_last_spoken: dict = field(default_factory=dict)
 
     def normalize(self):
         for k in ("curiosity","loneliness","playfulness","affection",
