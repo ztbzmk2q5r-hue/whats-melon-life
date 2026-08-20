@@ -1,111 +1,74 @@
 import hashlib
 from datetime import datetime, timezone
 
-
 class HeuristicReasoner:
-    """Lightweight heartbeat reasoner with memory + recent-dialogue continuity."""
+    """Heartbeat reasoner with memory, dialogue continuity and attention cooldowns."""
+    TOPIC_COOLDOWN = {"avocado": 8, "avocado_progress": 8, "company": 3, "boredom": 3, "general": 2, "open_thread": 1}
 
     def _pick(self, items, context, salt=""):
-        runtime = context.get("runtime", {})
-        key = "|".join([
-            str(runtime.get("last_heartbeat_at", "")),
-            str(runtime.get("last_interaction_at", "")),
-            str(runtime.get("heartbeat_count", "")),
-            salt,
-        ])
-        index = int(hashlib.sha256(key.encode("utf-8")).hexdigest()[:8], 16) % len(items)
-        return items[index]
+        r=context.get("runtime",{}); key="|".join([str(r.get("last_heartbeat_at","")),str(r.get("heartbeat_count","")),salt])
+        return items[int(hashlib.sha256(key.encode()).hexdigest()[:8],16)%len(items)]
 
-    def _recent_memory_text(self, context):
-        memories = context.get("memories") or []
-        return " ".join(str(m.get("summary", "")) for m in memories[-8:])
+    def _mem(self,c): return " ".join(str(m.get("summary","")) for m in (c.get("memories") or [])[-8:])
+    def _conv(self,c): return " ".join(str(x.get("speech","")) for x in (c.get("recent_conversation") or []))
+    def _recent_speech(self,c): return [str(x["speech"]) for x in (c.get("recent_conversation") or []) if x.get("speaker")=="アネラ" and x.get("speech")][-10:]
 
-    def _conversation_text(self, context):
-        return " ".join(str(x.get("speech", "")) for x in (context.get("recent_conversation") or []))
+    def _cool(self,c,topic):
+        r=c.get("runtime",{}); last=(r.get("topic_last_spoken") or {}).get(topic)
+        if last is None: return False
+        return int(r.get("heartbeat_count",0))-int(last) < self.TOPIC_COOLDOWN.get(topic,2)
 
-    def _anela_recent_speeches(self, context):
-        out = []
-        for record in context.get("recent_conversation") or []:
-            if record.get("speaker") == "アネラ" and record.get("speech"):
-                out.append(str(record["speech"]))
-        return out[-8:]
-
-    def _active_thread(self, context):
-        runtime = context.get("runtime", {})
-        threads = runtime.get("open_threads") or []
-        now = datetime.now(timezone.utc)
-        for thread in threads:
-            if not isinstance(thread, dict) or thread.get("resolved", False):
-                continue
-            text = str(thread.get("text", "")).strip()
-            if not text:
-                continue
-            created_at = thread.get("created_at")
-            if created_at:
-                try:
-                    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                    if (now - dt.astimezone(timezone.utc)).total_seconds() > 24 * 3600:
-                        continue
-                except (ValueError, TypeError):
-                    continue
-            return thread
+    def _active_thread(self,c):
+        now=datetime.now(timezone.utc)
+        for t in c.get("runtime",{}).get("open_threads") or []:
+            if not isinstance(t,dict) or t.get("resolved",False) or not str(t.get("text","")).strip(): continue
+            try:
+                d=datetime.fromisoformat(str(t.get("created_at","")).replace("Z","+00:00"))
+                if d.tzinfo is None:d=d.replace(tzinfo=timezone.utc)
+                if (now-d.astimezone(timezone.utc)).total_seconds()>86400:continue
+            except (ValueError,TypeError): continue
+            return t
         return None
 
-    def _pick_nonrepeating(self, options, context, salt):
-        recent = set(self._anela_recent_speeches(context))
-        fresh = [x for x in options if x not in recent]
-        return self._pick(fresh or options, context, salt)
+    def _fresh(self,opts,c,salt):
+        recent=set(self._recent_speech(c)); fresh=[x for x in opts if x not in recent]
+        return self._pick(fresh or opts,c,salt)
 
-    def think(self, context):
-        runtime = context.get("runtime", {})
-        affect = runtime.get("affect") or runtime
-        memory_text = self._recent_memory_text(context)
-        conversation_text = self._conversation_text(context)
-        thread = self._active_thread(context)
+    def think(self,c):
+        r=c.get("runtime",{}); a=r.get("affect") or r; mem=self._mem(c); conv=self._conv(c); t=self._active_thread(c)
+        if t and not self._cool(c,"open_thread"):
+            return {"text":t["text"],"speak_bias":.04,"topic":"open_thread","thread_id":t.get("id")}
 
-        if thread:
-            return {"text": thread["text"], "speak_bias": 0.04, "topic": "open_thread", "thread_id": thread.get("id")}
+        # A remembered subject is a candidate, never a permanent priority.
+        # Avocado receives a long cooldown after any avocado-family speech.
+        avocado_cool=self._cool(c,"avocado") or self._cool(c,"avocado_progress")
+        if not avocado_cool and ("アボカド" in mem or "アボカド" in conv) and a.get("curiosity",0)>=.72:
+            progressed="一緒に探しに行きましょう" in conv and "売ってる場所分かんない" in conv
+            if progressed:
+                xs=["今度しゅんとアボカドを探すなら、見つけた後に食べてみるのが楽しみです。","アボカド探しは約束しました。今は別のことも気になります。"]
+                return {"text":self._pick(xs,c,"avo-progress"),"speak_bias":.01,"topic":"avocado_progress"}
+            xs=["この前覚えたアボカド、いつか食べてみたいです。","アボカドの味はまだ知らないので、いつか確かめたいです。"]
+            return {"text":self._pick(xs,c,"avo"),"speak_bias":.015,"topic":"avocado"}
 
-        if "アボカド" in memory_text or "アボカド" in conversation_text:
-            searched_together = "一緒に探しに行きましょう" in conversation_text
-            shun_doesnt_know = "売ってる場所分かんない" in conversation_text
-            if searched_together and shun_doesnt_know:
-                next_steps = [
-                    "しゅんも売っている場所を知らないなら、今度一緒に探すのが楽しみです。",
-                    "アボカド探し、どこから見に行くのがいいでしょう。スーパーにはありそうな気がします。",
-                    "今度しゅんとアボカドを探しに行くなら、見つけたら実際に食べてみたいです。",
-                ]
-                return {"text": self._pick(next_steps, context, "avocado-progress"), "speak_bias": 0.02, "topic": "avocado_progress"}
-            if affect.get("curiosity", 0) >= 0.72:
-                avocado = [
-                    "この前しゅんが教えてくれたアボカド、まだ食べていません。ちょっと気になります。",
-                    "アボカドって、結局どんな味なんでしょう。しゅんに今度聞いてみたいです。",
-                ]
-                return {"text": self._pick(avocado, context, "avocado-thought"), "speak_bias": 0.035, "topic": "avocado"}
+        # Attention shifts to other needs while a recent subject cools down.
+        candidates=[]
+        if a.get("boredom",0)>=.38 and not self._cool(c,"boredom"):
+            candidates.append({"text":self._pick(["グランドオブガン、今日は何をしようか考えるのも楽しいですね。","何か新しい日本のものを見つけたいです。しゅんならまた変なものを知ってそうですね！"],c,"bored"),"speak_bias":.025,"topic":"boredom"})
+        if a.get("affection",0)>=.7 and not self._cool(c,"company"):
+            candidates.append({"text":self._pick(["そういえば、しゅんは今どうしてるんでしょう。少し話したいですね。","しゅんに何か面白いことがあったか聞いてみたいです。"],c,"company"),"speak_bias":.02,"topic":"company"})
+        if a.get("hunger",0)>=.65 and not self._cool(c,"food_general"):
+            candidates.append({"text":self._pick(["なんだかお腹が空いてきました。日本にはまだ知らない食べ物がいっぱいですね！","次はアボカド以外の食べ物も覚えてみたいですね！"],c,"food"),"speak_bias":.02,"topic":"food_general"})
+        if candidates: return self._pick(candidates,c,"attention-shift")
+        return {"text":self._pick(["今日は何か面白いことが起きないでしょうか。","しゅんは今何をしているんでしょう。","グランドオブガンでもしながら少し考えます。"],c,"general"),"speak_bias":.01,"topic":"general"}
 
-        if affect.get("loneliness", 0) >= 0.58:
-            thoughts = ["少し退屈です。しゅんは今、何をしているんでしょう。", "しゅんの声を聞いていないと、なんだか部屋が静かに感じます。", "しゅんに少し構ってほしい気分です。"]
-            return {"text": self._pick(thoughts, context, "lonely"), "speak_bias": 0.05, "topic": "company"}
-
-        if affect.get("boredom", 0) >= 0.62:
-            thoughts = ["少し暇になってきました。しゅんを誘ったら何か面白いことがあるかもしれません。", "グランドオブガンをするのもいいですけど、しゅんが何をしているのかも気になります。", "何か新しいものを見つけたいです。しゅんなら知っていそうです。"]
-            return {"text": self._pick(thoughts, context, "bored"), "speak_bias": 0.04, "topic": "boredom"}
-
-        thoughts = ["しゅんが今なにをしているのか、少し気になります。", "しゅん、今日は何をするつもりなんでしょう。", "何か面白いものを見つけていないか、しゅんに聞いてみたいです。", "そういえば、しゅんと少し話したい気分です。", "しゅんはちゃんと起きているでしょうか。", "今しゅんに声をかけたら、どんな返事をするでしょう。"]
-        return {"text": self._pick(thoughts, context, "general"), "speak_bias": 0.03, "topic": "general"}
-
-    def speak(self, context, thought):
-        topic = thought.get("topic", "general") if isinstance(thought, dict) else "general"
-        text = thought.get("text", "") if isinstance(thought, dict) else str(thought)
-        patterns = {
-            "avocado": ["しゅん！　そういえばアボカド、まだ食べてないんですね！　私、今度こそ食べてみたいです！", "しゅん、アボカドってどんな味なんですか？　この前からずっと気になってるんですよ！"],
-            "avocado_progress": ["しゅん！　今度アボカド、一緒に探しに行くんですよね！　見つけたら私、食べてみたいです！", "しゅん、アボカド探しのこと忘れてませんよね？　見つけるまでが勝負ですね！", "しゅん！　スーパーに行くことがあったら、今度はアボカド探しですね！"],
-            "company": ["しゅんー！　今、暇なんですね？　だったら少しくらい私に構ってください！", "しゅん、何してるんですか？　……なんとなく気になったんですよ！", "しゅん！　まだ起きてるんですね！　それなら少しお話ししましょう！"],
-            "boredom": ["しゅん！　何か面白いことありませんか？　私、ちょっと暇なんですよ！", "しゅん、今から何かしませんか？　グランドオブガンでもいいですね！", "しゅん！　新しい面白いもの、何か教えてください！　まだ知らないものがいっぱいですね！"],
-            "open_thread": ["しゅん！　さっきのこと、まだ気になってるんですよ！", "しゅん、そういえばさっきの話なんですが……続き、聞いてもいいんですよね？"],
-            "general": ["しゅん！　今、なにをしているんですか？　何か面白いことしてるんですね？", "しゅん、今日は何するんですか？　何かするなら私も一緒ですね！", "しゅん！　何か面白いもの見つけました？　私にも見せてください！", "しゅんー！　ちょっとこっち来てください！　いいものを思いついたんですよ！", "しゅん、ちゃんと起きてるんですね？　なら問題なしですね！", "しゅん！　少しお話ししませんか？　ちょうど暇だったんですよ！"],
-        }
-        options = patterns.get(topic, patterns["general"])
-        return self._pick_nonrepeating(options, context, f"speech:{topic}:{text}")
+    def speak(self,c,t):
+        topic=t.get("topic","general")
+        p={
+          "avocado":["しゅん！　アボカド、いつか食べてみたいですね！　でも今日は別のものも気になります！"],
+          "avocado_progress":["しゅん！　アボカド探しは今度のお楽しみですね！　見つけたら一緒に食べましょう！"],
+          "company":["しゅん！　今なにしてるんですか？　何か面白いことありました？","しゅんー！　少しお話ししましょう！　今日は何してたんですか？"],
+          "boredom":["しゅん！　グランドオブガンやりませんか？　今日は何して遊びましょう！","しゅん！　何か新しいもの教えてください！　まだ知らないものがいっぱいですね！"],
+          "food_general":["しゅん！　アボカド以外にも、私がまだ知らない食べ物ってあります？　いっぱいありそうですね！","しゅん、お腹空きました！　今日は何かおいしいもの食べたいですね！"],
+          "open_thread":["しゅん！　さっきの話、続きが気になります！　もう少し聞かせてください！"],
+          "general":["しゅん！　今日は何か面白いことありました？","しゅん、今なにしてるんですか？　私もちょっと暇なんですよ！","しゅん！　グランドオブガンでもします？　何かするなら一緒ですね！"]}
+        return self._fresh(p.get(topic,p["general"]),c,"speech:"+topic+":"+t.get("text",""))
