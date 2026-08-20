@@ -24,25 +24,14 @@ def initiative(rt, now, thought_bias=0.0):
     since_spoke = hours_since(rt.last_spoke_at, now, default=18.0)
     time_pressure = clamp(since_spoke/24.0)
     score = (
-        0.22*rt.curiosity +
-        0.18*rt.playfulness +
-        0.20*rt.affection +
-        0.14*rt.boredom +
-        0.11*rt.loneliness +
-        0.08*rt.energy +
-        0.07*time_pressure +
-        thought_bias
+        0.22*rt.curiosity + 0.18*rt.playfulness + 0.20*rt.affection +
+        0.14*rt.boredom + 0.11*rt.loneliness + 0.08*rt.energy +
+        0.07*time_pressure + thought_bias
     )
     threshold = max(0.57, 0.76-min(since_spoke,36.0)*0.0045)
     return clamp(score), threshold
 
 class WMLifeBrain:
-    """
-    state -> time -> memory/context -> thought -> initiative -> action -> persistence
-
-    LLMはreasonerとして差し替える。
-    Pythonは人格そのものではなく、脳の構造と履歴管理を担当する。
-    """
     def __init__(self, store, reasoner):
         self.store = store
         self.reasoner = reasoner
@@ -61,15 +50,11 @@ class WMLifeBrain:
             "relationship": self.store.load_json("relationship.json"),
             "runtime": rt.to_dict(),
             "memories": self.store.memories()[-20:],
-            # Recent dialogue is short-term episodic context. It outranks older
-            # memory summaries when deciding what has already been said or how
-            # an ongoing topic has progressed.
-            "recent_conversation": self.store.conversations()[-16:]
+            "recent_conversation": self.store.conversations()[-20:]
         }
 
         thought = self.reasoner.think(context)
         rt.current_thought = thought["text"]
-
         score, threshold = initiative(rt, now, thought.get("speak_bias",0.0))
         rt.initiative = score
         speech = None
@@ -81,6 +66,8 @@ class WMLifeBrain:
             rt.silence_streak = 0
             rt.loneliness *= 0.78
             rt.boredom *= 0.82
+            topic = thought.get("topic", "general")
+            rt.topic_last_spoken[topic] = rt.heartbeat_count
 
             self.store.append_conversation({
                 "id": f"speech-{rt.speech_count:06d}",
@@ -88,6 +75,7 @@ class WMLifeBrain:
                 "speaker": "アネラ",
                 "target": "しゅん",
                 "thought": thought["text"],
+                "topic": topic,
                 "speech": speech,
                 "initiative_score": round(score, 4),
                 "threshold": round(threshold, 4),
@@ -97,10 +85,6 @@ class WMLifeBrain:
             rt.silence_streak += 1
 
         self.store.save_runtime(rt)
-        return {
-            "should_speak": score >= threshold,
-            "speech": speech,
-            "initiative_score": round(score,4),
-            "threshold": round(threshold,4),
-            "thought": thought["text"]
-        }
+        return {"should_speak": score >= threshold, "speech": speech,
+                "initiative_score": round(score,4), "threshold": round(threshold,4),
+                "thought": thought["text"], "topic": thought.get("topic", "general")}
