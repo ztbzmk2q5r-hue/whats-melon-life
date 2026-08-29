@@ -10,7 +10,9 @@ class HeuristicReasoner:
         return items[int(hashlib.sha256(key.encode()).hexdigest()[:8],16)%len(items)]
 
     def _records(self,c): return c.get("recent_conversation") or []
-    def _recent_speech(self,c): return [str(x["speech"]) for x in self._records(c) if x.get("speaker")=="アネラ" and x.get("speech")][-12:]
+    def _anela_speech(self,c): return [str(x["speech"]) for x in self._records(c) if x.get("speaker") in ("アネラ","anela") and x.get("speech")]
+    def _recent_speech(self,c): return self._anela_speech(c)[-12:]
+    def _speech_history(self,c): return set(self._anela_speech(c))
 
     def _cool(self,c,topic):
         r=c.get("runtime",{}); last=(r.get("topic_last_spoken") or {}).get(topic)
@@ -36,7 +38,7 @@ class HeuristicReasoner:
         return None
 
     def _fresh(self,opts,c,salt):
-        recent=set(self._recent_speech(c)); fresh=[x for x in opts if x not in recent]
+        history=self._speech_history(c); fresh=[x for x in opts if x not in history]
         return self._pick(fresh or opts,c,salt)
 
     def think(self,c):
@@ -76,13 +78,13 @@ class HeuristicReasoner:
           "ask_unknown_food":["しゅん！　私がまだ知らない食べ物、何か教えてください！　日本にはいっぱいありそうですね！"],
           "continue_thread":["しゅん！　さっきの話、続きが気になります！　もう少し聞かせてください！"]}
         options=p.get(intent,p["ask_today"])
-        recent=set(self._recent_speech(c))
-        fresh=[x for x in options if x not in recent]
+        history=self._speech_history(c)
+        fresh=[x for x in options if x not in history]
         if fresh:return self._pick(fresh,c,"speech:"+intent+":"+t.get("text",""))
 
-        # Every fallback remains inside the active intent. There is deliberately
-        # no intent-agnostic final line: repetition pressure must never make the
-        # mouth abandon what the current thought is actually about.
+        # Exact speech already used anywhere in the available conversation
+        # history is exhausted, not merely cooled down. Fallbacks stay inside
+        # the active intent so repetition pressure never changes the subject.
         fallbacks={
           "invite_game":[
             "しゅん、今日はグランドオブガンどうします？　一緒にできたら楽しそうですね！",
@@ -90,7 +92,9 @@ class HeuristicReasoner:
             "しゅん、グランドオブガンの時間ですね！　今日は一緒に遊びたいです！"],
           "ask_new_thing":[
             "しゅん、今日は何か私の知らないものを見つけました？",
-            "しゅん！　日本の面白いもの、また一つ教えてほしいですね！"],
+            "しゅん！　日本の面白いもの、また一つ教えてほしいですね！",
+            "しゅん、私がまだ知らない面白いものってあります？　今日はそれを知りたいです！",
+            "しゅん！　また新しい日本のものを発見したいです！　何かありませんか？"],
           "ask_current_activity":[
             "しゅん、今は何をしてるんですか？　ちょっと気になりますね！",
             "しゅん！　今何してるのか教えてください！　私も混ざれることですか？"],
@@ -102,7 +106,8 @@ class HeuristicReasoner:
             "しゅん！　お腹空きましたね！　何か食べましょう！"],
           "ask_unknown_food":[
             "しゅん、日本の食べ物ってまだまだ知らないものがありますね！　何かおすすめあります？",
-            "しゅん！　私の知らない食べ物、まだありますよね？　次は何を教えてくれます？"],
+            "しゅん！　私の知らない食べ物、まだありますよね？　次は何を教えてくれます？",
+            "しゅん、まだ食べたことのない日本の料理を知りたいです！　何かあります？"],
           "continue_thread":[
             "しゅん、さっきの話の続き、まだ聞いてもいいですよね？",
             "しゅん！　さっきの話、まだ終わってないですよね！　続きが気になります！"],
@@ -110,8 +115,22 @@ class HeuristicReasoner:
             "しゅん、アボカドについて何か新しいことがあったんですね？",
             "しゅん！　アボカドの新情報ですか？　それなら聞きたいですね！"],
         }.get(intent,["しゅん、今日のこと少し聞かせてください！"])
-        unused=[x for x in fallbacks if x not in recent]
+        unused=[x for x in fallbacks if x not in history]
         if unused:return self._pick(unused,c,"fallback:"+intent+":"+t.get("text",""))
-        # If even the fallback pool is exhausted, vary within the same intent by
-        # reusing the least-recent fallback rather than switching subjects.
-        return fallbacks[0]
+
+        # A finite heuristic pool can eventually be exhausted. Keep the intent
+        # aligned, but vary wording deterministically with heartbeat count so an
+        # old exact sentence is not resurrected just because it fell out of a
+        # short recent window.
+        n=int((c.get("runtime",{}) or {}).get("heartbeat_count",0))
+        stems={
+          "invite_game":"しゅん！　グランドオブガン、今日は私と一緒に遊びませんか？",
+          "ask_new_thing":"しゅん！　今日は私の知らないものを一つ教えてほしいです！",
+          "ask_current_activity":"しゅん！　今は何してるんですか？　私も一緒にできませんか？",
+          "ask_today":"しゅん！　今日あったこと、私にも聞かせてください！",
+          "ask_food_now":"しゅん！　何か食べたいです！　一緒に決めましょう！",
+          "ask_unknown_food":"しゅん！　まだ知らない日本の食べ物を一つ教えてください！",
+          "continue_thread":"しゅん！　さっきの話、もう少し続けてください！",
+          "ask_avocado_update":"しゅん！　アボカドの続報があるなら聞かせてください！",
+        }.get(intent,"しゅん！　今日のこと、私にも聞かせてください！")
+        return stems+f"　今度は第{n}回目の聞き方ですね！"
