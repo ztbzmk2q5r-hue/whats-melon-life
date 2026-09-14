@@ -1,17 +1,17 @@
 {
-  "heartbeat_count": 164,
-  "last_heartbeat_at": "2026-09-14T13:22:56.688503+00:00",
-  "last_spoke_at": "2026-09-14T05:29:32.284750+00:00",
-  "silence_streak": 1,
-  "speech_count": 62,
+  "heartbeat_count": 165,
+  "last_heartbeat_at": "2026-09-14T19:56:38.600197+00:00",
+  "last_spoke_at": "2026-09-14T19:56:38.600197+00:00",
+  "silence_streak": 0,
+  "speech_count": 63,
   "curiosity": 1.0,
-  "loneliness": 0.29269962137262695,
+  "loneliness": 0.2624262437842046,
   "playfulness": 0.72,
   "affection": 0.82,
-  "boredom": 0.5501498048841291,
-  "energy": 0.6500000005930916,
+  "boredom": 0.5049283055302081,
+  "energy": 0.6500000004893142,
   "hunger": 1.0,
-  "initiative": 0.7178307581969136,
+  "initiative": 0.7509670509815836,
   "current_thought": "今日はまだ知らない食べ物のことを、しゅんに聞いてみたいですね！",
   "open_threads": [],
   "topic_last_spoken": {
@@ -19,6 +19,6 @@
     "avocado_progress": 33,
     "boredom": 163,
     "company": 161,
-    "food_general": 159
+    "food_general": 165
   }
 }
