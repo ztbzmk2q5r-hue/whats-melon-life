@@ -1,24 +1,24 @@
 {
-  "heartbeat_count": 329,
-  "last_heartbeat_at": "2026-10-23T12:10:50.109342+00:00",
-  "last_spoke_at": "2026-10-23T05:25:52.634775+00:00",
-  "silence_streak": 1,
-  "speech_count": 146,
+  "heartbeat_count": 330,
+  "last_heartbeat_at": "2026-10-23T17:29:32.643988+00:00",
+  "last_spoke_at": "2026-10-23T17:29:32.643988+00:00",
+  "silence_streak": 0,
+  "speech_count": 147,
   "curiosity": 1.0,
-  "loneliness": 0.2915413393004433,
+  "loneliness": 0.25502368358745686,
   "playfulness": 0.72,
   "affection": 0.82,
-  "boredom": 0.5483364353361566,
+  "boredom": 0.49319276144709284,
   "energy": 0.6500000000000002,
   "hunger": 1.0,
-  "initiative": 0.7141221022017081,
+  "initiative": 0.7409467688579024,
   "current_thought": "そういえば、しゅんは今どうしてるんでしょう。少し話したいですね。",
   "open_threads": [],
   "topic_last_spoken": {
     "avocado": 23,
     "avocado_progress": 33,
     "boredom": 328,
-    "company": 325,
+    "company": 330,
     "food_general": 327
   }
 }
